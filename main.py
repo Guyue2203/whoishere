@@ -105,37 +105,60 @@ class RemoteDesktopDetector:
             return []
 
     def check_remote_desktop_status(self):
-        """检测是否通过远程桌面连接"""
+        """检测是否通过远程桌面连接 - 更严格的检测"""
         try:
-            # 方法1: 检查环境变量
-            if os.environ.get('SESSIONNAME', '').startswith('RDP-'):
+            # 方法1: 检查环境变量 (最可靠的方法)
+            session_name = os.environ.get('SESSIONNAME', '')
+            if session_name.startswith('RDP-'):
                 return True
-                
-            # 方法2: 检查进程
-            for proc in psutil.process_iter(['pid', 'name']):
-                try:
-                    if proc.info['name'] and 'rdp' in proc.info['name'].lower():
-                        return True
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
-                    
-            # 方法3: 检查注册表 (Windows)
+            
+            # 方法2: 检查当前会话是否通过RDP连接
             try:
                 result = subprocess.run(
-                    ['reg', 'query', 'HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Terminal Server', 
-                     '/v', 'fDenyTSConnections'],
+                    ['query', 'session', os.environ.get('USERNAME', '')],
                     capture_output=True, text=True, timeout=5
                 )
-                if '0x0' in result.stdout:  # 远程桌面已启用
-                    # 进一步检查是否有活动连接
-                    result2 = subprocess.run(
-                        ['query', 'session'],
-                        capture_output=True, text=True, timeout=5
-                    )
-                    if 'rdp-tcp' in result2.stdout.lower():
+                if result.returncode == 0:
+                    # 检查输出中是否包含RDP会话
+                    if 'rdp-tcp' in result.stdout.lower() or 'RDP-' in result.stdout:
                         return True
             except:
                 pass
+            
+            # 方法3: 检查活动RDP会话
+            try:
+                result = subprocess.run(
+                    ['query', 'session'],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    lines = result.stdout.strip().split('\n')
+                    for line in lines[2:]:  # 跳过标题行
+                        if line.strip():
+                            parts = line.split()
+                            if len(parts) >= 4:
+                                session_name = parts[0]
+                                username = parts[1]
+                                session_state = parts[3]
+                                
+                                # 检查是否是活动的RDP会话
+                                if (session_name.startswith('rdp-tcp') or session_name.startswith('RDP-')) and session_state.lower() == 'active':
+                                    return True
+            except:
+                pass
+            
+            # 方法4: 检查RDP进程 (作为辅助检测)
+            rdp_processes = 0
+            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+                try:
+                    if proc.info['name'] and 'rdp' in proc.info['name'].lower():
+                        rdp_processes += 1
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            
+            # 如果有很多RDP进程，可能是通过RDP连接
+            if rdp_processes > 2:
+                return True
                 
             return False
             
@@ -144,23 +167,33 @@ class RemoteDesktopDetector:
             return False
     
     def update_status(self):
-        """更新连接状态"""
+        """更新连接状态 - 带确认机制"""
         current_status = self.check_remote_desktop_status()
         current_time = datetime.now()
         
-        # 如果状态发生变化，记录历史
+        # 如果状态发生变化，进行二次确认
         if current_status != self.is_remote_session:
-            self.connection_history.append({
-                'timestamp': current_time.isoformat(),
-                'status': 'connected' if current_status else 'disconnected',
-                'message': '远程桌面已连接' if current_status else '远程桌面已断开'
-            })
+            # 等待1秒后再次检查，避免误判
+            time.sleep(1)
+            confirmed_status = self.check_remote_desktop_status()
             
-            # 只保留最近50条记录
-            if len(self.connection_history) > 50:
-                self.connection_history = self.connection_history[-50:]
+            # 只有确认状态一致才更新
+            if confirmed_status == current_status:
+                self.connection_history.append({
+                    'timestamp': current_time.isoformat(),
+                    'status': 'connected' if current_status else 'disconnected',
+                    'message': '远程桌面已连接' if current_status else '远程桌面已断开'
+                })
+                
+                # 只保留最近50条记录
+                if len(self.connection_history) > 50:
+                    self.connection_history = self.connection_history[-50:]
+                
+                self.is_remote_session = current_status
+                print(f"状态已更新: {'远程桌面已连接' if current_status else '远程桌面已断开'}")
+            else:
+                print(f"状态变化未确认，保持原状态: {'远程桌面已连接' if self.is_remote_session else '本地使用'}")
         
-        self.is_remote_session = current_status
         self.last_check_time = current_time
     
     def get_status_info(self):
@@ -200,9 +233,28 @@ def api_history():
 @app.route('/api/force_check')
 def api_force_check():
     """API - 强制检查状态"""
-    detector.update_status()
+    # 强制重新检测，跳过确认机制
+    current_status = detector.check_remote_desktop_status()
+    current_time = datetime.now()
+    
+    # 直接更新状态，不进行二次确认
+    if current_status != detector.is_remote_session:
+        detector.connection_history.append({
+            'timestamp': current_time.isoformat(),
+            'status': 'connected' if current_status else 'disconnected',
+            'message': '远程桌面已连接' if current_status else '远程桌面已断开'
+        })
+        
+        # 只保留最近50条记录
+        if len(detector.connection_history) > 50:
+            detector.connection_history = detector.connection_history[-50:]
+        
+        detector.is_remote_session = current_status
+        detector.last_check_time = current_time
+        print(f"强制更新状态: {'远程桌面已连接' if current_status else '远程桌面已断开'}")
+    
     return jsonify({
-        'message': '状态已更新',
+        'message': '状态已强制更新',
         'status': detector.get_status_info()
     })
 
@@ -389,6 +441,7 @@ if __name__ == '__main__':
             <div id="statusText" class="status-text">检查中...</div>
             <div id="lastCheck" class="last-check">最后检查: --</div>
             <button class="refresh-btn" onclick="checkStatus()">🔄 刷新状态</button>
+            <button class="refresh-btn" onclick="forceCheck()" style="background: #e74c3c;">⚡ 强制检查</button>
         </div>
         
         <div class="users-section">
@@ -470,6 +523,21 @@ if __name__ == '__main__':
             } catch (error) {
                 console.error('获取状态失败:', error);
                 document.getElementById('statusText').textContent = '获取状态失败';
+            }
+        }
+        
+        async function forceCheck() {
+            try {
+                document.getElementById('statusText').textContent = '强制检查中...';
+                const response = await fetch('/api/force_check');
+                const data = await response.json();
+                updateStatus(data.status);
+                updateHistory(data.status);
+                updateUsers(data.status);
+                console.log('强制检查完成:', data.message);
+            } catch (error) {
+                console.error('强制检查失败:', error);
+                document.getElementById('statusText').textContent = '强制检查失败';
             }
         }
         
