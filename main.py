@@ -267,7 +267,7 @@ def background_monitor():
             # 更新托盘图标
             if tray_icon:
                 tray_icon.icon = update_tray_icon()
-            time.sleep(10)  # 每10秒检查一次
+            time.sleep(30)  # 每30秒检查一次
         except Exception as e:
             # 只在前台运行时输出错误
             if not (hasattr(sys, 'frozen') or sys.executable.endswith('pythonw.exe')):
@@ -524,8 +524,8 @@ if __name__ == '__main__':
         // 页面加载时检查状态
         checkStatus();
         
-        // 每10秒自动刷新
-        setInterval(checkStatus, 10000);
+        // 每30秒自动刷新
+        setInterval(checkStatus, 30000);
     </script>
 </body>
 </html>'''
