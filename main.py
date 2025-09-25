@@ -16,74 +16,94 @@ class RemoteDesktopDetector:
         self.connection_history = []
         
     def get_remote_desktop_users(self):
-        """获取远程桌面连接用户信息 - 检测所有用户的RDP连接"""
+        """获取远程桌面连接用户信息 - 基于端口3389连接检测"""
         try:
             users = []
             
-            # 方法1: 使用query session命令获取所有会话
+            # 方法1: 检查端口3389的ESTABLISHED连接
             try:
                 result = subprocess.run(
-                    ['query', 'session'],
+                    ['netstat', '-an'],
                     capture_output=True, text=True, timeout=5
                 )
                 if result.returncode == 0:
                     lines = result.stdout.strip().split('\n')
-                    for line in lines[2:]:  # 跳过标题行
-                        if line.strip():
+                    for line in lines:
+                        if '3389' in line and 'ESTABLISHED' in line:
+                            # 解析连接信息
                             parts = line.split()
                             if len(parts) >= 4:
-                                session_name = parts[0]
-                                username = parts[1]
-                                session_id = parts[2]
-                                session_state = parts[3]
+                                local_address = parts[1]
+                                remote_address = parts[2]
+                                state = parts[3]
                                 
-                                # 检查是否是远程桌面会话
-                                if session_name.startswith('rdp-tcp') or session_name.startswith('RDP-'):
-                                    users.append({
-                                        'username': username,
-                                        'session_name': session_name,
-                                        'session_id': session_id,
-                                        'state': session_state,
-                                        'connection_type': 'RDP'
-                                    })
+                                # 提取远程IP地址
+                                if ':' in remote_address:
+                                    remote_ip = remote_address.split(':')[0]
+                                else:
+                                    remote_ip = remote_address
+                                
+                                users.append({
+                                    'username': f'Remote User from {remote_ip}',
+                                    'session_name': 'RDP Connection',
+                                    'session_id': 'Network',
+                                    'state': 'Active',
+                                    'connection_type': 'RDP',
+                                    'remote_ip': remote_ip,
+                                    'local_address': local_address,
+                                    'remote_address': remote_address
+                                })
             except Exception as e:
-                print(f"查询会话信息时出错: {e}")
+                print(f"检查网络连接时出错: {e}")
             
-            # 方法2: 使用qwinsta命令获取更详细的信息
+            # 方法2: 使用netstat -ano获取更详细的连接信息
             try:
                 result = subprocess.run(
-                    ['qwinsta'],
+                    ['netstat', '-ano'],
                     capture_output=True, text=True, timeout=5
                 )
                 if result.returncode == 0:
                     lines = result.stdout.strip().split('\n')
-                    for line in lines[1:]:  # 跳过标题行
-                        if line.strip():
+                    for line in lines:
+                        if '3389' in line and 'ESTABLISHED' in line:
                             parts = line.split()
                             if len(parts) >= 5:
-                                session_name = parts[0]
-                                username = parts[1]
-                                session_id = parts[2]
-                                session_state = parts[3]
-                                session_type = parts[4] if len(parts) > 4 else 'Unknown'
+                                local_address = parts[1]
+                                remote_address = parts[2]
+                                state = parts[3]
+                                pid = parts[4]
                                 
-                                # 检查是否是远程桌面会话
-                                if session_name.startswith('rdp-tcp') or session_name.startswith('RDP-'):
-                                    # 检查是否已存在该用户
-                                    existing_user = next((u for u in users if u['username'] == username), None)
-                                    if not existing_user:
-                                        users.append({
-                                            'username': username,
-                                            'session_name': session_name,
-                                            'session_id': session_id,
-                                            'state': session_state,
-                                            'type': session_type,
-                                            'connection_type': 'RDP'
-                                        })
+                                # 尝试获取进程信息
+                                try:
+                                    process = psutil.Process(int(pid))
+                                    process_name = process.name()
+                                except:
+                                    process_name = 'Unknown'
+                                
+                                # 提取远程IP地址
+                                if ':' in remote_address:
+                                    remote_ip = remote_address.split(':')[0]
+                                else:
+                                    remote_ip = remote_address
+                                
+                                # 检查是否已存在该连接
+                                existing_user = next((u for u in users if u.get('remote_ip') == remote_ip), None)
+                                if not existing_user:
+                                    users.append({
+                                        'username': f'Remote User from {remote_ip}',
+                                        'session_name': 'RDP Connection',
+                                        'session_id': pid,
+                                        'state': 'Active',
+                                        'connection_type': 'RDP',
+                                        'remote_ip': remote_ip,
+                                        'local_address': local_address,
+                                        'remote_address': remote_address,
+                                        'process_name': process_name
+                                    })
             except Exception as e:
-                print(f"查询详细会话信息时出错: {e}")
+                print(f"检查详细网络连接时出错: {e}")
             
-            # 方法3: 检查当前用户是否通过RDP连接
+            # 方法3: 检查当前用户是否通过RDP连接（作为补充）
             current_user = os.environ.get('USERNAME', '')
             session_name = os.environ.get('SESSIONNAME', '')
             if session_name.startswith('RDP-'):
@@ -97,22 +117,6 @@ class RemoteDesktopDetector:
                         'state': 'Active',
                         'connection_type': 'RDP'
                     })
-            
-            # 方法4: 检查是否有活动的RDP连接进程
-            try:
-                result = subprocess.run(
-                    ['netstat', '-an'],
-                    capture_output=True, text=True, timeout=5
-                )
-                if result.returncode == 0:
-                    # 检查是否有RDP端口3389的监听连接
-                    if '3389' in result.stdout and 'LISTENING' in result.stdout:
-                        # 进一步检查是否有客户端连接
-                        if 'ESTABLISHED' in result.stdout and '3389' in result.stdout:
-                            # 这里可以添加更详细的连接检测
-                            pass
-            except Exception as e:
-                print(f"检查网络连接时出错: {e}")
             
             return users
             
@@ -471,6 +475,10 @@ if __name__ == '__main__':
                             <div>会话名称: ${user.session_name}</div>
                             <div>会话ID: ${user.session_id}</div>
                             <div>连接类型: ${user.connection_type}</div>
+                            ${user.remote_ip ? `<div>远程IP: ${user.remote_ip}</div>` : ''}
+                            ${user.local_address ? `<div>本地地址: ${user.local_address}</div>` : ''}
+                            ${user.remote_address ? `<div>远程地址: ${user.remote_address}</div>` : ''}
+                            ${user.process_name ? `<div>进程名称: ${user.process_name}</div>` : ''}
                             ${user.type ? `<div>会话类型: ${user.type}</div>` : ''}
                         </div>
                         <span class="user-state ${user.state.toLowerCase() === 'active' ? 'state-active' : 'state-disconnected'}">
