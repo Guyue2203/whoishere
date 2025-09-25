@@ -1,5 +1,5 @@
 @echo off
-echo Starting Remote Desktop Monitor Service...
+echo Starting WhoIsHere Service in background...
 
 REM Activate virtual environment
 if exist ".venv\Scripts\activate.bat" (
@@ -17,8 +17,5 @@ echo Service will continue running in system tray after closing CMD window
 echo Right-click tray icon to view status or exit service
 echo.
 
-REM Run with visible window (can be closed, service continues)
-start "WhoIsHere Service" /min python main.py
-
-REM Alternative: Run completely in background (uncomment the line below and comment the line above)
-REM pythonw main.py
+REM Run in background without window
+pythonw main.py

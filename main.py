@@ -543,4 +543,8 @@ if __name__ == '__main__':
     print("💡 关闭CMD窗口后服务会继续在托盘运行")
     
     # 启动托盘图标（这会阻塞主线程，保持程序运行）
-    tray_icon.run()
+    try:
+        tray_icon.run()
+    except KeyboardInterrupt:
+        print("服务已停止")
+        tray_icon.stop()
