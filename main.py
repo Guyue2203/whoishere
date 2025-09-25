@@ -200,7 +200,10 @@ def create_window():
         window = tk.Tk()
         window.title("WhoIsHere - 远程桌面监控")
         window.geometry("400x300")
+        # 设置关闭窗口时只隐藏，不退出程序
         window.protocol("WM_DELETE_WINDOW", hide_window)
+        # 设置窗口关闭时不退出程序
+        window.wm_withdraw = hide_window
         
         # 创建界面
         frame = tk.Frame(window)
@@ -264,6 +267,7 @@ def hide_window():
     global window
     if window:
         window.withdraw()
+        print("窗口已隐藏到托盘，服务继续运行")
 
 def show_status():
     """显示状态信息"""
@@ -278,6 +282,7 @@ def open_web():
 def quit_app():
     """退出应用"""
     global window, tray_icon
+    print("正在退出服务...")
     if window:
         window.destroy()
     if tray_icon:
@@ -614,12 +619,12 @@ if __name__ == '__main__':
     flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=51472, debug=False), daemon=True)
     flask_thread.start()
     
-    # 创建并显示主窗口
-    create_window()
-    
     print("🚀 远程桌面状态监控服务启动中...")
     print("📱 访问 http://localhost:51472 查看状态")
     print("💡 关闭窗口后服务会继续在托盘运行")
     
-    # 启动托盘图标
+    # 创建并显示主窗口
+    create_window()
+    
+    # 启动托盘图标（这会阻塞主线程，保持程序运行）
     tray_icon.run()
