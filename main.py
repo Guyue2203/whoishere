@@ -7,8 +7,6 @@ from flask import Flask, render_template, jsonify
 import psutil
 import pystray
 from PIL import Image, ImageDraw
-import tkinter as tk
-from tkinter import messagebox
 
 app = Flask(__name__)
 
@@ -164,7 +162,6 @@ class RemoteDesktopDetector:
 detector = RemoteDesktopDetector()
 
 # 全局变量
-window = None
 tray_icon = None
 
 # 创建托盘图标
@@ -193,86 +190,10 @@ def update_tray_icon():
     
     return image
 
-def create_window():
-    """创建主窗口"""
-    global window
-    if window is None or not window.winfo_exists():
-        window = tk.Tk()
-        window.title("WhoIsHere - 远程桌面监控")
-        window.geometry("400x300")
-        # 设置关闭窗口时只隐藏，不退出程序
-        window.protocol("WM_DELETE_WINDOW", hide_window)
-        # 设置窗口关闭时不退出程序
-        window.wm_withdraw = hide_window
-        
-        # 创建界面
-        frame = tk.Frame(window)
-        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-        
-        # 状态显示
-        status_label = tk.Label(frame, text="远程桌面监控服务", font=("Arial", 14, "bold"))
-        status_label.pack(pady=10)
-        
-        # 状态指示器
-        status_frame = tk.Frame(frame)
-        status_frame.pack(pady=10)
-        
-        status_indicator = tk.Label(status_frame, text="●", font=("Arial", 24))
-        status_indicator.pack(side=tk.LEFT)
-        
-        status_text = tk.Label(status_frame, text="检查中...", font=("Arial", 12))
-        status_text.pack(side=tk.LEFT, padx=10)
-        
-        # 按钮
-        button_frame = tk.Frame(frame)
-        button_frame.pack(pady=20)
-        
-        open_web_btn = tk.Button(button_frame, text="打开Web界面", command=open_web, width=15)
-        open_web_btn.pack(side=tk.LEFT, padx=5)
-        
-        hide_btn = tk.Button(button_frame, text="最小化到托盘", command=hide_window, width=15)
-        hide_btn.pack(side=tk.LEFT, padx=5)
-        
-        quit_btn = tk.Button(button_frame, text="退出", command=quit_app, width=15)
-        quit_btn.pack(side=tk.LEFT, padx=5)
-        
-        # 状态更新函数
-        def update_status():
-            if detector.is_remote_session:
-                status_indicator.config(text="●", fg="red")
-                status_text.config(text="有外部用户远程连接")
-            else:
-                status_indicator.config(text="●", fg="green")
-                status_text.config(text="没有外部用户远程连接")
-            
-            # 每5秒更新一次
-            window.after(5000, update_status)
-        
-        update_status()
-        
-        return window
-    return window
-
-def show_window():
-    """显示窗口"""
-    global window
-    if window is None or not window.winfo_exists():
-        window = create_window()
-    window.deiconify()
-    window.lift()
-    window.focus_force()
-
-def hide_window():
-    """隐藏窗口到托盘"""
-    global window
-    if window:
-        window.withdraw()
-        print("窗口已隐藏到托盘，服务继续运行")
-
 def show_status():
     """显示状态信息"""
     status = "有外部用户远程连接" if detector.is_remote_session else "没有外部用户远程连接"
-    messagebox.showinfo("状态", f"当前状态: {status}")
+    print(f"当前状态: {status}")
 
 def open_web():
     """打开Web界面"""
@@ -281,10 +202,8 @@ def open_web():
 
 def quit_app():
     """退出应用"""
-    global window, tray_icon
+    global tray_icon
     print("正在退出服务...")
-    if window:
-        window.destroy()
     if tray_icon:
         tray_icon.stop()
     os._exit(0)
@@ -292,7 +211,6 @@ def quit_app():
 # 创建托盘图标
 tray_icon = pystray.Icon("WhoIsHere", create_icon(), "WhoIsHere - 远程桌面监控")
 tray_icon.menu = pystray.Menu(
-    pystray.MenuItem("显示窗口", show_window),
     pystray.MenuItem("状态", show_status),
     pystray.MenuItem("打开Web界面", open_web),
     pystray.MenuItem("退出", quit_app)
@@ -621,10 +539,8 @@ if __name__ == '__main__':
     
     print("🚀 远程桌面状态监控服务启动中...")
     print("📱 访问 http://localhost:51472 查看状态")
-    print("💡 关闭窗口后服务会继续在托盘运行")
-    
-    # 创建并显示主窗口
-    create_window()
+    print("💡 服务已最小化到系统托盘，右键图标可查看菜单")
+    print("💡 关闭CMD窗口后服务会继续在托盘运行")
     
     # 启动托盘图标（这会阻塞主线程，保持程序运行）
     tray_icon.run()

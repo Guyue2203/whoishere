@@ -13,8 +13,8 @@ if exist ".venv\Scripts\activate.bat" (
 )
 
 echo Access URL: http://localhost:51472
-echo Service will continue running in system tray after closing window
-echo Right-click tray icon to restore window or exit service
+echo Service will continue running in system tray after closing CMD window
+echo Right-click tray icon to view status or exit service
 echo.
 
-python main.py
+start "WhoIsHere Service" python main.py

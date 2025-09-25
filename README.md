@@ -5,7 +5,7 @@
 ## 快速开始
 
 1. 安装依赖: `pip install -r requirements.txt`
-2. 运行服务: `python main.py`
+2. 运行服务: 双击 `WhoIsHere.bat`
 3. 访问: http://localhost:51472
 
 ## 功能说明
