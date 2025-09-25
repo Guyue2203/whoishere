@@ -1,10 +1,9 @@
 import os
 import time
-import json
 import subprocess
 import threading
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify
 import psutil
 
 app = Flask(__name__)

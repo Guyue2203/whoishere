@@ -1,34 +1,19 @@
 @echo off
-echo 正在启动远程桌面状态监控服务...
-echo.
+echo 启动远程桌面状态监控服务...
 
-REM 检查Python是否安装
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo 错误: 未找到Python，请先安装Python
+REM 激活虚拟环境
+if exist ".venv\Scripts\activate.bat" (
+    echo 正在激活虚拟环境...
+    call .venv\Scripts\activate.bat
+) else (
+    echo 警告: 未找到虚拟环境 .venv\Scripts\activate.bat
+    echo 请确保虚拟环境已创建
     pause
     exit /b 1
 )
 
-REM 检查依赖是否安装
-echo 检查依赖包...
-pip show flask >nul 2>&1
-if errorlevel 1 (
-    echo 正在安装依赖包...
-    pip install -r requirements.txt
-    if errorlevel 1 (
-        echo 错误: 依赖包安装失败
-        pause
-        exit /b 1
-    )
-)
-
-echo.
-echo 启动Web服务...
-echo 访问地址: http://localhost:5000
+echo 访问地址: http://localhost:51472
 echo 按 Ctrl+C 停止服务
 echo.
 
 python main.py
-
-pause
