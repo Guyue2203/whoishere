@@ -16,11 +16,11 @@ class RemoteDesktopDetector:
         self.connection_history = []
         
     def get_remote_desktop_users(self):
-        """获取远程桌面连接用户信息"""
+        """获取远程桌面连接用户信息 - 检测所有用户的RDP连接"""
         try:
             users = []
             
-            # 方法1: 使用query session命令
+            # 方法1: 使用query session命令获取所有会话
             try:
                 result = subprocess.run(
                     ['query', 'session'],
@@ -49,7 +49,7 @@ class RemoteDesktopDetector:
             except Exception as e:
                 print(f"查询会话信息时出错: {e}")
             
-            # 方法2: 使用qwinsta命令 (更详细的信息)
+            # 方法2: 使用qwinsta命令获取更详细的信息
             try:
                 result = subprocess.run(
                     ['qwinsta'],
@@ -83,8 +83,8 @@ class RemoteDesktopDetector:
             except Exception as e:
                 print(f"查询详细会话信息时出错: {e}")
             
-            # 方法3: 检查当前用户环境变量
-            current_user = os.environ.get('USERNAME', 'Unknown')
+            # 方法3: 检查当前用户是否通过RDP连接
+            current_user = os.environ.get('USERNAME', '')
             session_name = os.environ.get('SESSIONNAME', '')
             if session_name.startswith('RDP-'):
                 # 检查是否已存在该用户
@@ -98,6 +98,22 @@ class RemoteDesktopDetector:
                         'connection_type': 'RDP'
                     })
             
+            # 方法4: 检查是否有活动的RDP连接进程
+            try:
+                result = subprocess.run(
+                    ['netstat', '-an'],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    # 检查是否有RDP端口3389的监听连接
+                    if '3389' in result.stdout and 'LISTENING' in result.stdout:
+                        # 进一步检查是否有客户端连接
+                        if 'ESTABLISHED' in result.stdout and '3389' in result.stdout:
+                            # 这里可以添加更详细的连接检测
+                            pass
+            except Exception as e:
+                print(f"检查网络连接时出错: {e}")
+            
             return users
             
         except Exception as e:
@@ -105,59 +121,13 @@ class RemoteDesktopDetector:
             return []
 
     def check_remote_desktop_status(self):
-        """检测是否通过远程桌面连接 - 更严格的检测"""
+        """检测是否有远程桌面用户连接 - 检查所有用户的RDP连接"""
         try:
-            # 方法1: 检查环境变量 (最可靠的方法)
-            session_name = os.environ.get('SESSIONNAME', '')
-            if session_name.startswith('RDP-'):
-                return True
+            # 获取所有远程桌面连接的用户
+            remote_users = self.get_remote_desktop_users()
             
-            # 方法2: 检查当前会话是否通过RDP连接
-            try:
-                result = subprocess.run(
-                    ['query', 'session', os.environ.get('USERNAME', '')],
-                    capture_output=True, text=True, timeout=5
-                )
-                if result.returncode == 0:
-                    # 检查输出中是否包含RDP会话
-                    if 'rdp-tcp' in result.stdout.lower() or 'RDP-' in result.stdout:
-                        return True
-            except:
-                pass
-            
-            # 方法3: 检查活动RDP会话
-            try:
-                result = subprocess.run(
-                    ['query', 'session'],
-                    capture_output=True, text=True, timeout=5
-                )
-                if result.returncode == 0:
-                    lines = result.stdout.strip().split('\n')
-                    for line in lines[2:]:  # 跳过标题行
-                        if line.strip():
-                            parts = line.split()
-                            if len(parts) >= 4:
-                                session_name = parts[0]
-                                username = parts[1]
-                                session_state = parts[3]
-                                
-                                # 检查是否是活动的RDP会话
-                                if (session_name.startswith('rdp-tcp') or session_name.startswith('RDP-')) and session_state.lower() == 'active':
-                                    return True
-            except:
-                pass
-            
-            # 方法4: 检查RDP进程 (作为辅助检测)
-            rdp_processes = 0
-            for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
-                try:
-                    if proc.info['name'] and 'rdp' in proc.info['name'].lower():
-                        rdp_processes += 1
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
-            
-            # 如果有很多RDP进程，可能是通过RDP连接
-            if rdp_processes > 2:
+            # 如果有远程桌面用户连接，返回True
+            if remote_users:
                 return True
                 
             return False
@@ -202,7 +172,7 @@ class RemoteDesktopDetector:
         return {
             'is_remote_session': self.is_remote_session,
             'last_check_time': self.last_check_time.isoformat() if self.last_check_time else None,
-            'status_text': '远程桌面已连接' if self.is_remote_session else '本地使用',
+            'status_text': f'有 {len(remote_users)} 个用户通过远程桌面连接' if self.is_remote_session else '没有用户通过远程桌面连接',
             'connection_history': self.connection_history[-10:],  # 最近10条记录
             'remote_users': remote_users,
             'user_count': len(remote_users)
@@ -464,11 +434,11 @@ if __name__ == '__main__':
             if (data.is_remote_session) {
                 indicator.className = 'status-indicator status-connected';
                 indicator.innerHTML = '🔴';
-                text.textContent = '远程桌面已连接';
+                text.textContent = data.status_text || '有用户通过远程桌面连接';
             } else {
                 indicator.className = 'status-indicator status-disconnected';
                 indicator.innerHTML = '🟢';
-                text.textContent = '本地使用';
+                text.textContent = data.status_text || '没有用户通过远程桌面连接';
             }
             
             if (data.last_check_time) {
@@ -509,7 +479,7 @@ if __name__ == '__main__':
                     </div>
                 `).join('');
             } else {
-                usersList.innerHTML = '<div class="no-users">当前没有远程桌面用户连接</div>';
+                usersList.innerHTML = '<div class="no-users">当前没有用户通过远程桌面连接</div>';
             }
         }
         
