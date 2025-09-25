@@ -16,4 +16,4 @@ echo 访问地址: http://localhost:51472
 echo 按 Ctrl+C 停止服务
 echo.
 
-python main.py
+start "WhoIsHere服务" python main.py
