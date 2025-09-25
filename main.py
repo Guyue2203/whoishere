@@ -15,6 +15,95 @@ class RemoteDesktopDetector:
         self.last_check_time = None
         self.connection_history = []
         
+    def get_remote_desktop_users(self):
+        """获取远程桌面连接用户信息"""
+        try:
+            users = []
+            
+            # 方法1: 使用query session命令
+            try:
+                result = subprocess.run(
+                    ['query', 'session'],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    lines = result.stdout.strip().split('\n')
+                    for line in lines[2:]:  # 跳过标题行
+                        if line.strip():
+                            parts = line.split()
+                            if len(parts) >= 4:
+                                session_name = parts[0]
+                                username = parts[1]
+                                session_id = parts[2]
+                                session_state = parts[3]
+                                
+                                # 检查是否是远程桌面会话
+                                if session_name.startswith('rdp-tcp') or session_name.startswith('RDP-'):
+                                    users.append({
+                                        'username': username,
+                                        'session_name': session_name,
+                                        'session_id': session_id,
+                                        'state': session_state,
+                                        'connection_type': 'RDP'
+                                    })
+            except Exception as e:
+                print(f"查询会话信息时出错: {e}")
+            
+            # 方法2: 使用qwinsta命令 (更详细的信息)
+            try:
+                result = subprocess.run(
+                    ['qwinsta'],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    lines = result.stdout.strip().split('\n')
+                    for line in lines[1:]:  # 跳过标题行
+                        if line.strip():
+                            parts = line.split()
+                            if len(parts) >= 5:
+                                session_name = parts[0]
+                                username = parts[1]
+                                session_id = parts[2]
+                                session_state = parts[3]
+                                session_type = parts[4] if len(parts) > 4 else 'Unknown'
+                                
+                                # 检查是否是远程桌面会话
+                                if session_name.startswith('rdp-tcp') or session_name.startswith('RDP-'):
+                                    # 检查是否已存在该用户
+                                    existing_user = next((u for u in users if u['username'] == username), None)
+                                    if not existing_user:
+                                        users.append({
+                                            'username': username,
+                                            'session_name': session_name,
+                                            'session_id': session_id,
+                                            'state': session_state,
+                                            'type': session_type,
+                                            'connection_type': 'RDP'
+                                        })
+            except Exception as e:
+                print(f"查询详细会话信息时出错: {e}")
+            
+            # 方法3: 检查当前用户环境变量
+            current_user = os.environ.get('USERNAME', 'Unknown')
+            session_name = os.environ.get('SESSIONNAME', '')
+            if session_name.startswith('RDP-'):
+                # 检查是否已存在该用户
+                existing_user = next((u for u in users if u['username'] == current_user), None)
+                if not existing_user:
+                    users.append({
+                        'username': current_user,
+                        'session_name': session_name,
+                        'session_id': 'Current',
+                        'state': 'Active',
+                        'connection_type': 'RDP'
+                    })
+            
+            return users
+            
+        except Exception as e:
+            print(f"获取远程桌面用户信息时出错: {e}")
+            return []
+
     def check_remote_desktop_status(self):
         """检测是否通过远程桌面连接"""
         try:
@@ -76,11 +165,14 @@ class RemoteDesktopDetector:
     
     def get_status_info(self):
         """获取状态信息"""
+        remote_users = self.get_remote_desktop_users()
         return {
             'is_remote_session': self.is_remote_session,
             'last_check_time': self.last_check_time.isoformat() if self.last_check_time else None,
             'status_text': '远程桌面已连接' if self.is_remote_session else '本地使用',
-            'connection_history': self.connection_history[-10:]  # 最近10条记录
+            'connection_history': self.connection_history[-10:],  # 最近10条记录
+            'remote_users': remote_users,
+            'user_count': len(remote_users)
         }
 
 # 创建检测器实例
@@ -112,6 +204,16 @@ def api_force_check():
     return jsonify({
         'message': '状态已更新',
         'status': detector.get_status_info()
+    })
+
+@app.route('/api/users')
+def api_users():
+    """API - 获取远程桌面连接用户"""
+    users = detector.get_remote_desktop_users()
+    return jsonify({
+        'users': users,
+        'count': len(users),
+        'timestamp': datetime.now().isoformat()
     })
 
 def background_monitor():
@@ -224,6 +326,53 @@ if __name__ == '__main__':
         .refresh-btn:hover {
             background: #2980b9;
         }
+        .users-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+        .user-item {
+            padding: 15px;
+            margin: 10px 0;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid #e74c3c;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .user-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .user-details {
+            font-size: 14px;
+            color: #7f8c8d;
+            line-height: 1.4;
+        }
+        .user-state {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        .state-active {
+            background: #d4edda;
+            color: #155724;
+        }
+        .state-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .no-users {
+            text-align: center;
+            color: #7f8c8d;
+            font-style: italic;
+            padding: 20px;
+        }
     </style>
 </head>
 <body>
@@ -240,6 +389,11 @@ if __name__ == '__main__':
             <div id="statusText" class="status-text">检查中...</div>
             <div id="lastCheck" class="last-check">最后检查: --</div>
             <button class="refresh-btn" onclick="checkStatus()">🔄 刷新状态</button>
+        </div>
+        
+        <div class="users-section">
+            <h3>👥 当前远程桌面用户</h3>
+            <div id="usersList">加载中...</div>
         </div>
         
         <div class="history">
@@ -284,12 +438,35 @@ if __name__ == '__main__':
             }
         }
         
+        function updateUsers(data) {
+            const usersList = document.getElementById('usersList');
+            if (data.remote_users && data.remote_users.length > 0) {
+                usersList.innerHTML = data.remote_users.map(user => `
+                    <div class="user-item">
+                        <div class="user-name">👤 ${user.username}</div>
+                        <div class="user-details">
+                            <div>会话名称: ${user.session_name}</div>
+                            <div>会话ID: ${user.session_id}</div>
+                            <div>连接类型: ${user.connection_type}</div>
+                            ${user.type ? `<div>会话类型: ${user.type}</div>` : ''}
+                        </div>
+                        <span class="user-state ${user.state.toLowerCase() === 'active' ? 'state-active' : 'state-disconnected'}">
+                            ${user.state}
+                        </span>
+                    </div>
+                `).join('');
+            } else {
+                usersList.innerHTML = '<div class="no-users">当前没有远程桌面用户连接</div>';
+            }
+        }
+        
         async function checkStatus() {
             try {
                 const response = await fetch('/api/status');
                 const data = await response.json();
                 updateStatus(data);
                 updateHistory(data);
+                updateUsers(data);
             } catch (error) {
                 console.error('获取状态失败:', error);
                 document.getElementById('statusText').textContent = '获取状态失败';
@@ -318,6 +495,7 @@ if __name__ == '__main__':
     print("🔧 API端点:")
     print("   - GET /api/status - 获取当前状态")
     print("   - GET /api/history - 获取连接历史")
+    print("   - GET /api/users - 获取远程桌面用户")
     print("   - GET /api/force_check - 强制检查状态")
     
     # 启动Flask应用
