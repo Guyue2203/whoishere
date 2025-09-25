@@ -44,7 +44,7 @@ class RemoteDesktopDetector:
                                     remote_ip = remote_address
                                 
                                 users.append({
-                                    'username': f'Remote User from {remote_ip}',
+                                    'username': f'Remote Connection from {remote_ip}',
                                     'session_name': 'RDP Connection',
                                     'session_id': 'Network',
                                     'state': 'Active',
@@ -90,7 +90,7 @@ class RemoteDesktopDetector:
                                 existing_user = next((u for u in users if u.get('remote_ip') == remote_ip), None)
                                 if not existing_user:
                                     users.append({
-                                        'username': f'Remote User from {remote_ip}',
+                                        'username': f'Remote Connection from {remote_ip}',
                                         'session_name': 'RDP Connection',
                                         'session_id': pid,
                                         'state': 'Active',
@@ -470,16 +470,15 @@ if __name__ == '__main__':
             if (data.remote_users && data.remote_users.length > 0) {
                 usersList.innerHTML = data.remote_users.map(user => `
                     <div class="user-item">
-                        <div class="user-name">👤 ${user.username}</div>
+                        <div class="user-name">🌐 ${user.username}</div>
                         <div class="user-details">
-                            <div>会话名称: ${user.session_name}</div>
-                            <div>会话ID: ${user.session_id}</div>
-                            <div>连接类型: ${user.connection_type}</div>
-                            ${user.remote_ip ? `<div>远程IP: ${user.remote_ip}</div>` : ''}
-                            ${user.local_address ? `<div>本地地址: ${user.local_address}</div>` : ''}
-                            ${user.remote_address ? `<div>远程地址: ${user.remote_address}</div>` : ''}
-                            ${user.process_name ? `<div>进程名称: ${user.process_name}</div>` : ''}
-                            ${user.type ? `<div>会话类型: ${user.type}</div>` : ''}
+                            <div><strong>远程IP地址:</strong> ${user.remote_ip || 'Unknown'}</div>
+                            <div><strong>连接状态:</strong> ${user.state}</div>
+                            <div><strong>连接类型:</strong> ${user.connection_type}</div>
+                            ${user.local_address ? `<div><strong>本地地址:</strong> ${user.local_address}</div>` : ''}
+                            ${user.remote_address ? `<div><strong>远程地址:</strong> ${user.remote_address}</div>` : ''}
+                            ${user.process_name ? `<div><strong>进程名称:</strong> ${user.process_name}</div>` : ''}
+                            ${user.session_id ? `<div><strong>会话ID:</strong> ${user.session_id}</div>` : ''}
                         </div>
                         <span class="user-state ${user.state.toLowerCase() === 'active' ? 'state-active' : 'state-disconnected'}">
                             ${user.state}
