@@ -13,7 +13,6 @@ class RemoteDesktopDetector:
     def __init__(self):
         self.is_remote_session = False
         self.last_check_time = None
-        self.connection_history = []
         
     def get_remote_desktop_users(self):
         """获取远程桌面连接用户信息 - 基于端口43389连接检测"""
@@ -140,20 +139,10 @@ class RemoteDesktopDetector:
             
             # 只有确认状态一致才更新
             if confirmed_status == current_status:
-                self.connection_history.append({
-                    'timestamp': current_time.isoformat(),
-                    'status': 'connected' if current_status else 'disconnected',
-                    'message': '远程桌面已连接' if current_status else '远程桌面已断开'
-                })
-                
-                # 只保留最近50条记录
-                if len(self.connection_history) > 50:
-                    self.connection_history = self.connection_history[-50:]
-                
                 self.is_remote_session = current_status
-                print(f"状态已更新: {'远程桌面已连接' if current_status else '远程桌面已断开'}")
+                print(f"状态已更新: {'有外部用户远程连接' if current_status else '没有外部用户远程连接'}")
             else:
-                print(f"状态变化未确认，保持原状态: {'远程桌面已连接' if self.is_remote_session else '本地使用'}")
+                print(f"状态变化未确认，保持原状态: {'有外部用户远程连接' if self.is_remote_session else '没有外部用户远程连接'}")
         
         self.last_check_time = current_time
     
@@ -163,8 +152,7 @@ class RemoteDesktopDetector:
         return {
             'is_remote_session': self.is_remote_session,
             'last_check_time': self.last_check_time.isoformat() if self.last_check_time else None,
-            'status_text': f'有 {len(remote_users)} 个用户通过远程桌面连接' if self.is_remote_session else '没有用户通过远程桌面连接',
-            'connection_history': self.connection_history[-10:],  # 最近10条记录
+            'status_text': f'有 {len(remote_users)} 个外部用户通过远程桌面连接' if self.is_remote_session else '没有外部用户通过远程桌面连接',
             'remote_users': remote_users,
             'user_count': len(remote_users)
         }
@@ -183,13 +171,6 @@ def api_status():
     detector.update_status()
     return jsonify(detector.get_status_info())
 
-@app.route('/api/history')
-def api_history():
-    """API - 获取连接历史"""
-    return jsonify({
-        'history': detector.connection_history,
-        'total_records': len(detector.connection_history)
-    })
 
 @app.route('/api/force_check')
 def api_force_check():
@@ -200,19 +181,9 @@ def api_force_check():
     
     # 直接更新状态，不进行二次确认
     if current_status != detector.is_remote_session:
-        detector.connection_history.append({
-            'timestamp': current_time.isoformat(),
-            'status': 'connected' if current_status else 'disconnected',
-            'message': '远程桌面已连接' if current_status else '远程桌面已断开'
-        })
-        
-        # 只保留最近50条记录
-        if len(detector.connection_history) > 50:
-            detector.connection_history = detector.connection_history[-50:]
-        
         detector.is_remote_session = current_status
         detector.last_check_time = current_time
-        print(f"强制更新状态: {'远程桌面已连接' if current_status else '远程桌面已断开'}")
+        print(f"强制更新状态: {'有外部用户远程连接' if current_status else '没有外部用户远程连接'}")
     
     return jsonify({
         'message': '状态已强制更新',
@@ -410,10 +381,6 @@ if __name__ == '__main__':
             <div id="usersList">加载中...</div>
         </div>
         
-        <div class="history">
-            <h3>📋 连接历史</h3>
-            <div id="historyList">加载中...</div>
-        </div>
     </div>
 
     <script>
@@ -438,19 +405,6 @@ if __name__ == '__main__':
             }
         }
         
-        function updateHistory(data) {
-            const historyList = document.getElementById('historyList');
-            if (data.connection_history && data.connection_history.length > 0) {
-                historyList.innerHTML = data.connection_history.map(item => `
-                    <div class="history-item">
-                        <div>${item.message}</div>
-                        <div class="history-time">${new Date(item.timestamp).toLocaleString()}</div>
-                    </div>
-                `).join('');
-            } else {
-                historyList.innerHTML = '<div class="history-item">暂无历史记录</div>';
-            }
-        }
         
         function updateUsers(data) {
             const usersList = document.getElementById('usersList');
@@ -482,7 +436,6 @@ if __name__ == '__main__':
                 const response = await fetch('/api/status');
                 const data = await response.json();
                 updateStatus(data);
-                updateHistory(data);
                 updateUsers(data);
             } catch (error) {
                 console.error('获取状态失败:', error);
@@ -496,7 +449,6 @@ if __name__ == '__main__':
                 const response = await fetch('/api/force_check');
                 const data = await response.json();
                 updateStatus(data.status);
-                updateHistory(data.status);
                 updateUsers(data.status);
                 console.log('强制检查完成:', data.message);
             } catch (error) {
@@ -526,7 +478,6 @@ if __name__ == '__main__':
     print("📱 访问 http://localhost:51472 查看状态")
     print("🔧 API端点:")
     print("   - GET /api/status - 获取当前状态")
-    print("   - GET /api/history - 获取连接历史")
     print("   - GET /api/users - 获取远程桌面用户")
     print("   - GET /api/force_check - 强制检查状态")
     
