@@ -141,9 +141,12 @@ class RemoteDesktopDetector:
             # 只有确认状态一致才更新
             if confirmed_status == current_status:
                 self.is_remote_session = current_status
-                print(f"状态已更新: {'有外部用户远程连接' if current_status else '没有外部用户远程连接'}")
+                # 只在前台运行时输出
+                if not (hasattr(sys, 'frozen') or sys.executable.endswith('pythonw.exe')):
+                    print(f"状态已更新: {'有外部用户远程连接' if current_status else '没有外部用户远程连接'}")
             else:
-                print(f"状态变化未确认，保持原状态: {'有外部用户远程连接' if self.is_remote_session else '没有外部用户远程连接'}")
+                if not (hasattr(sys, 'frozen') or sys.executable.endswith('pythonw.exe')):
+                    print(f"状态变化未确认，保持原状态: {'有外部用户远程连接' if self.is_remote_session else '没有外部用户远程连接'}")
         
         self.last_check_time = current_time
     
@@ -266,7 +269,9 @@ def background_monitor():
                 tray_icon.icon = update_tray_icon()
             time.sleep(10)  # 每10秒检查一次
         except Exception as e:
-            print(f"后台监控出错: {e}")
+            # 只在前台运行时输出错误
+            if not (hasattr(sys, 'frozen') or sys.executable.endswith('pythonw.exe')):
+                print(f"后台监控出错: {e}")
             time.sleep(10)
 
 if __name__ == '__main__':
@@ -537,14 +542,22 @@ if __name__ == '__main__':
     flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=51472, debug=False), daemon=True)
     flask_thread.start()
     
-    print("🚀 远程桌面状态监控服务启动中...")
-    print("📱 访问 http://localhost:51472 查看状态")
-    print("💡 服务已最小化到系统托盘，右键图标可查看菜单")
-    print("💡 关闭CMD窗口后服务会继续在托盘运行")
+    # 检查是否在后台运行（pythonw）
+    import sys
+    if hasattr(sys, 'frozen') or sys.executable.endswith('pythonw.exe'):
+        # 后台运行，不输出到控制台
+        pass
+    else:
+        # 前台运行，输出信息
+        print("🚀 远程桌面状态监控服务启动中...")
+        print("📱 访问 http://localhost:51472 查看状态")
+        print("💡 服务已最小化到系统托盘，右键图标可查看菜单")
+        print("💡 关闭CMD窗口后服务会继续在托盘运行")
     
     # 启动托盘图标（这会阻塞主线程，保持程序运行）
     try:
         tray_icon.run()
     except KeyboardInterrupt:
-        print("服务已停止")
+        if not (hasattr(sys, 'frozen') or sys.executable.endswith('pythonw.exe')):
+            print("服务已停止")
         tray_icon.stop()

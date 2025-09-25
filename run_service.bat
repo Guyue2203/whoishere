@@ -3,19 +3,15 @@ echo Starting WhoIsHere Service in background...
 
 REM Activate virtual environment
 if exist ".venv\Scripts\activate.bat" (
-    echo Activating virtual environment...
     call .venv\Scripts\activate.bat
 ) else (
-    echo Warning: Virtual environment not found at .venv\Scripts\activate.bat
-    echo Please ensure virtual environment is created
+    echo Warning: Virtual environment not found
     pause
     exit /b 1
 )
 
+echo Service started. Check system tray for icon.
 echo Access URL: http://localhost:51472
-echo Service will continue running in system tray after closing CMD window
-echo Right-click tray icon to view status or exit service
-echo.
 
-REM Run in background without window
+REM Run completely in background
 pythonw main.py
