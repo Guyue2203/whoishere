@@ -16,11 +16,11 @@ class RemoteDesktopDetector:
         self.connection_history = []
         
     def get_remote_desktop_users(self):
-        """获取远程桌面连接用户信息 - 基于端口3389连接检测"""
+        """获取远程桌面连接用户信息 - 基于端口43389连接检测"""
         try:
             users = []
             
-            # 方法1: 检查端口3389的ESTABLISHED连接
+            # 方法1: 检查端口43389的ESTABLISHED连接
             try:
                 result = subprocess.run(
                     ['netstat', '-an'],
@@ -29,7 +29,7 @@ class RemoteDesktopDetector:
                 if result.returncode == 0:
                     lines = result.stdout.strip().split('\n')
                     for line in lines:
-                        if '3389' in line and 'ESTABLISHED' in line:
+                        if '43389' in line and 'ESTABLISHED' in line:
                             # 解析连接信息
                             parts = line.split()
                             if len(parts) >= 4:
@@ -65,7 +65,7 @@ class RemoteDesktopDetector:
                 if result.returncode == 0:
                     lines = result.stdout.strip().split('\n')
                     for line in lines:
-                        if '3389' in line and 'ESTABLISHED' in line:
+                        if '43389' in line and 'ESTABLISHED' in line:
                             parts = line.split()
                             if len(parts) >= 5:
                                 local_address = parts[1]
