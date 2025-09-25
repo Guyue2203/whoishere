@@ -103,20 +103,7 @@ class RemoteDesktopDetector:
             except Exception as e:
                 print(f"检查详细网络连接时出错: {e}")
             
-            # 方法3: 检查当前用户是否通过RDP连接（作为补充）
-            current_user = os.environ.get('USERNAME', '')
-            session_name = os.environ.get('SESSIONNAME', '')
-            if session_name.startswith('RDP-'):
-                # 检查是否已存在该用户
-                existing_user = next((u for u in users if u['username'] == current_user), None)
-                if not existing_user:
-                    users.append({
-                        'username': current_user,
-                        'session_name': session_name,
-                        'session_id': 'Current',
-                        'state': 'Active',
-                        'connection_type': 'RDP'
-                    })
+            # 注意：不检测当前用户，因为当前用户一直登录着，没有意义
             
             return users
             
